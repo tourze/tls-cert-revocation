@@ -1,0 +1,33 @@
+{
+  "name": "tourze/tls-cert-revocation",
+  "description": "TLS certificate revocation checking library with CRL and OCSP support",
+  "type": "library",
+  "license": "MIT",
+  "require": {
+    "ext-hash": "*",
+    "psr/log": "^3|^2|^1",
+    "tourze/enum-extra": "0.1.*",
+    "tourze/tls-common": "0.0.*",
+    "tourze/tls-crypto-asymmetric": "0.0.*",
+    "tourze/tls-x509-core": "0.0.*",
+    "tourze/tls-x509-validation": "0.0.*"
+  },
+  "require-dev": {
+    "phpstan/phpstan": "^2.1",
+    "phpunit/phpunit": "^11.5",
+    "symfony/framework-bundle": "^7.3",
+    "tourze/phpunit-base": "1.*",
+    "tourze/phpunit-enum": "0.0.*",
+    "tourze/symfony-testing-framework": "0.0.*"
+  },
+  "autoload": {
+    "psr-4": {
+      "Tourze\\TLSCertRevocation\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Tourze\\TLSCertRevocation\\Tests\\": "tests/"
+    }
+  }
+}
