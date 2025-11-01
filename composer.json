@@ -6,7 +6,7 @@
   "require": {
     "ext-hash": "*",
     "psr/log": "^3|^2|^1",
-    "tourze/enum-extra": "1.*",
+    "tourze/enum-extra": "1.0.*",
     "tourze/tls-common": "0.0.*",
     "tourze/tls-crypto-asymmetric": "0.0.*",
     "tourze/tls-x509-core": "0.0.*",
