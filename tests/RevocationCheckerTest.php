@@ -225,12 +225,10 @@ final class RevocationCheckerTest extends TestCase
     public function testCheckWithCRLOnlyWhenCertificateIsNotRevokedReturnsTrue(): void
     {
         // 配置颁发者证书返回CRL分发点
-        // @phpstan-ignore-next-line
-        $this->issuer->setExtensionResponse('cRLDistributionPoints', ['http://crl.example.com/ca.crl']);
+                $this->issuer->setExtensionResponse('cRLDistributionPoints', ['http://crl.example.com/ca.crl']);
 
         // 配置CRL验证器返回证书未被撤销
-        // @phpstan-ignore-next-line
-        $this->crlValidator->setIsRevokedResult(false);
+                $this->crlValidator->setIsRevokedResult(false);
 
         $checker = new RevocationChecker(
             RevocationPolicy::CRL_ONLY,
@@ -250,12 +248,10 @@ final class RevocationCheckerTest extends TestCase
     public function testCheckWithCRLOnlyWhenCertificateIsRevokedReturnsFalse(): void
     {
         // 配置颁发者证书返回CRL分发点
-        // @phpstan-ignore-next-line
-        $this->issuer->setExtensionResponse('cRLDistributionPoints', ['http://crl.example.com/ca.crl']);
+                $this->issuer->setExtensionResponse('cRLDistributionPoints', ['http://crl.example.com/ca.crl']);
 
         // 配置CRL验证器返回证书已被撤销
-        // @phpstan-ignore-next-line
-        $this->crlValidator->setIsRevokedResult(true);
+                $this->crlValidator->setIsRevokedResult(true);
 
         $checker = new RevocationChecker(
             RevocationPolicy::CRL_ONLY,
@@ -275,8 +271,7 @@ final class RevocationCheckerTest extends TestCase
     public function testCheckWithCRLOnlyWhenNoCRLDistributionPointsThrowsException(): void
     {
         // 配置颁发者证书不返回CRL分发点
-        // @phpstan-ignore-next-line
-        $this->issuer->setExtensionResponse('cRLDistributionPoints', []);
+                $this->issuer->setExtensionResponse('cRLDistributionPoints', []);
 
         $checker = new RevocationChecker(
             RevocationPolicy::CRL_ONLY,
@@ -336,12 +331,10 @@ final class RevocationCheckerTest extends TestCase
         ;
 
         // 配置颁发者证书返回CRL分发点
-        // @phpstan-ignore-next-line
-        $this->issuer->setExtensionResponse('cRLDistributionPoints', ['http://crl.example.com/ca.crl']);
+                $this->issuer->setExtensionResponse('cRLDistributionPoints', ['http://crl.example.com/ca.crl']);
 
         // 配置CRL验证器返回证书未被撤销
-        // @phpstan-ignore-next-line
-        $this->crlValidator->setIsRevokedResult(false);
+                $this->crlValidator->setIsRevokedResult(false);
 
         $checker = new RevocationChecker(
             RevocationPolicy::OCSP_PREFERRED,
@@ -366,12 +359,10 @@ final class RevocationCheckerTest extends TestCase
         ;
 
         // 配置颁发者证书返回CRL分发点
-        // @phpstan-ignore-next-line
-        $this->issuer->setExtensionResponse('cRLDistributionPoints', ['http://crl.example.com/ca.crl']);
+                $this->issuer->setExtensionResponse('cRLDistributionPoints', ['http://crl.example.com/ca.crl']);
 
         // 配置CRL验证器抛出异常
-        // @phpstan-ignore-next-line
-        $this->crlValidator->setExceptionToThrow(new \Exception('CRL检查失败'));
+                $this->crlValidator->setExceptionToThrow(new \Exception('CRL检查失败'));
 
         $checker = new RevocationChecker(
             RevocationPolicy::SOFT_FAIL,
@@ -398,12 +389,10 @@ final class RevocationCheckerTest extends TestCase
         ;
 
         // 配置颁发者证书返回CRL分发点
-        // @phpstan-ignore-next-line
-        $this->issuer->setExtensionResponse('cRLDistributionPoints', ['http://crl.example.com/ca.crl']);
+                $this->issuer->setExtensionResponse('cRLDistributionPoints', ['http://crl.example.com/ca.crl']);
 
         // 配置CRL验证器抛出异常
-        // @phpstan-ignore-next-line
-        $this->crlValidator->setExceptionToThrow(new \Exception('CRL服务器不可用'));
+                $this->crlValidator->setExceptionToThrow(new \Exception('CRL服务器不可用'));
 
         $checker = new RevocationChecker(
             RevocationPolicy::HARD_FAIL,
