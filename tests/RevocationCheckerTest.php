@@ -24,95 +24,40 @@ final class RevocationCheckerTest extends TestCase
 
     private X509Certificate $issuer;
 
+    /**
+     * @var OCSPClient&\PHPUnit\Framework\MockObject\MockObject
+     */
     private OCSPClient $ocspClient;
 
+    /**
+     * @var CRLValidator&\PHPUnit\Framework\MockObject\MockObject
+     */
     private CRLValidator $crlValidator;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        // 使用匿名类替代具体类Mock以符合静态分析规则
-        $this->certificate = new class extends X509Certificate {
-            /** @return array<string, string> */
-            public function getSubject(): array
-            {
-                return ['CN' => 'example.com'];
-            }
+        // 使用真实的 X509Certificate 实例
+        $this->certificate = new X509Certificate();
+        $this->issuer = new X509Certificate();
 
-            // 可重写的方法供测试使用
-            public function getIssuerDN(bool $derFormat = false): ?string
-            {
-                return null; // 默认值，可在具体测试中覆盖
-            }
+        // OCSPClient 需要 Mock，因为它涉及网络请求
+        $this->ocspClient = $this->createMock(OCSPClient::class);
 
-            public function getSerialNumber(): ?string
-            {
-                return null; // 默认值，可在具体测试中覆盖
-            }
+        // CRLValidator 需要 Mock，因为 isRevoked 方法默认总是返回 false
+        $this->crlValidator = $this->createMock(CRLValidator::class);
+    }
 
-            public function getExtension(string $oid): mixed
-            {
-                return null; // 默认值，可在具体测试中覆盖
-            }
-        };
+    /**
+     * 创建一个具有特定状态的 OCSPResponse
+     */
+    private function createOCSPResponse(int $certStatus): OCSPResponse
+    {
+        $response = $this->createMock(OCSPResponse::class);
+        $response->method('getCertStatus')->willReturn($certStatus);
 
-        // 使用匿名类替代具体类Mock以符合静态分析规则
-        $this->issuer = new class extends X509Certificate {
-            /** @var array<string, mixed> */
-            private array $extensionResponses = [];
-
-            /** @return array<string, string> */
-            public function getSubject(): array
-            {
-                return ['CN' => 'Example CA'];
-            }
-
-            // 可重写的方法供测试使用
-            public function getExtension(string $oid): mixed
-            {
-                return $this->extensionResponses[$oid] ?? null;
-            }
-
-            // 测试辅助方法：设置扩展返回值
-            public function setExtensionResponse(string $oid, mixed $value): void
-            {
-                $this->extensionResponses[$oid] = $value;
-            }
-        };
-
-        // 创建完整的OCSP客户端和CRL验证器的模拟
-        $this->ocspClient = $this->getMockBuilder(OCSPClient::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['checkCertificate'])
-            ->getMock()
-        ;
-
-        // 使用匿名类替代具体类Mock以符合静态分析规则
-        $this->crlValidator = new class extends CRLValidator {
-            private bool $isRevokedResult = false;
-
-            private ?\Exception $exceptionToThrow = null;
-
-            public function setIsRevokedResult(bool $result): void
-            {
-                $this->isRevokedResult = $result;
-            }
-
-            public function setExceptionToThrow(?\Exception $exception): void
-            {
-                $this->exceptionToThrow = $exception;
-            }
-
-            public function isRevoked(X509Certificate $certificate, X509Certificate $issuer): bool
-            {
-                if (null !== $this->exceptionToThrow) {
-                    throw $this->exceptionToThrow;
-                }
-
-                return $this->isRevokedResult;
-            }
-        };
+        return $response;
     }
 
     public function testCheckWithDisabledPolicyReturnsTrue(): void
@@ -132,18 +77,7 @@ final class RevocationCheckerTest extends TestCase
 
     public function testCheckWithOCSPOnlyWhenCertificateIsGoodReturnsTrue(): void
     {
-        // 使用匿名类替代具体类createStub以符合静态分析规则
-        $ocspResponse = new class extends OCSPResponse {
-            public function __construct()
-            {
-                parent::__construct(0);
-            }
-
-            public function getCertStatus(): int
-            {
-                return 0;
-            }
-        };
+        $ocspResponse = $this->createOCSPResponse(0); // 0 = good
 
         // 配置OCSP客户端返回"good"状态
         $this->ocspClient->method('checkCertificate')
@@ -168,18 +102,7 @@ final class RevocationCheckerTest extends TestCase
 
     public function testCheckWithOCSPOnlyWhenCertificateIsRevokedReturnsFalse(): void
     {
-        // 使用匿名类替代具体类createStub以符合静态分析规则
-        $ocspResponse = new class extends OCSPResponse {
-            public function __construct()
-            {
-                parent::__construct(0);
-            }
-
-            public function getCertStatus(): int
-            {
-                return 1;
-            }
-        };
+        $ocspResponse = $this->createOCSPResponse(1); // 1 = revoked
 
         // 配置OCSP客户端返回"revoked"状态
         $this->ocspClient->method('checkCertificate')
@@ -224,11 +147,16 @@ final class RevocationCheckerTest extends TestCase
 
     public function testCheckWithCRLOnlyWhenCertificateIsNotRevokedReturnsTrue(): void
     {
-        // 配置颁发者证书返回CRL分发点
-                $this->issuer->setExtensionResponse('cRLDistributionPoints', ['http://crl.example.com/ca.crl']);
+        // 配置颁发者证书返回CRL分发点（使用 setExtensions 方法）
+        $this->issuer->setExtensions([
+            'cRLDistributionPoints' => ['http://crl.example.com/ca.crl'],
+        ]);
 
         // 配置CRL验证器返回证书未被撤销
-                $this->crlValidator->setIsRevokedResult(false);
+        $this->crlValidator->method('isRevoked')
+            ->with($this->certificate, $this->issuer)
+            ->willReturn(false)
+        ;
 
         $checker = new RevocationChecker(
             RevocationPolicy::CRL_ONLY,
@@ -248,10 +176,15 @@ final class RevocationCheckerTest extends TestCase
     public function testCheckWithCRLOnlyWhenCertificateIsRevokedReturnsFalse(): void
     {
         // 配置颁发者证书返回CRL分发点
-                $this->issuer->setExtensionResponse('cRLDistributionPoints', ['http://crl.example.com/ca.crl']);
+        $this->issuer->setExtensions([
+            'cRLDistributionPoints' => ['http://crl.example.com/ca.crl'],
+        ]);
 
         // 配置CRL验证器返回证书已被撤销
-                $this->crlValidator->setIsRevokedResult(true);
+        $this->crlValidator->method('isRevoked')
+            ->with($this->certificate, $this->issuer)
+            ->willReturn(true)
+        ;
 
         $checker = new RevocationChecker(
             RevocationPolicy::CRL_ONLY,
@@ -270,8 +203,10 @@ final class RevocationCheckerTest extends TestCase
 
     public function testCheckWithCRLOnlyWhenNoCRLDistributionPointsThrowsException(): void
     {
-        // 配置颁发者证书不返回CRL分发点
-                $this->issuer->setExtensionResponse('cRLDistributionPoints', []);
+        // 配置颁发者证书返回空的CRL分发点
+        $this->issuer->setExtensions([
+            'cRLDistributionPoints' => [],
+        ]);
 
         $checker = new RevocationChecker(
             RevocationPolicy::CRL_ONLY,
@@ -287,18 +222,7 @@ final class RevocationCheckerTest extends TestCase
 
     public function testCheckWithOCSPPreferredWhenOCSPSucceedsDoesNotCheckCRL(): void
     {
-        // 使用匿名类替代具体类createStub以符合静态分析规则
-        $ocspResponse = new class extends OCSPResponse {
-            public function __construct()
-            {
-                parent::__construct(0);
-            }
-
-            public function getCertStatus(): int
-            {
-                return 0;
-            }
-        };
+        $ocspResponse = $this->createOCSPResponse(0); // 0 = good
 
         // 配置OCSP客户端返回"good"状态
         $this->ocspClient->method('checkCertificate')
@@ -306,8 +230,8 @@ final class RevocationCheckerTest extends TestCase
             ->willReturn($ocspResponse)
         ;
 
-        // CRL验证器不应被调用 - 由于使用匿名类，我们无法直接验证never()调用
-        // 如果isRevoked被调用，测试将失败，这提供了隐式验证
+        // CRL验证器不应被调用
+        $this->crlValidator->expects($this->never())->method('isRevoked');
 
         $checker = new RevocationChecker(
             RevocationPolicy::OCSP_PREFERRED,
@@ -331,10 +255,15 @@ final class RevocationCheckerTest extends TestCase
         ;
 
         // 配置颁发者证书返回CRL分发点
-                $this->issuer->setExtensionResponse('cRLDistributionPoints', ['http://crl.example.com/ca.crl']);
+        $this->issuer->setExtensions([
+            'cRLDistributionPoints' => ['http://crl.example.com/ca.crl'],
+        ]);
 
         // 配置CRL验证器返回证书未被撤销
-                $this->crlValidator->setIsRevokedResult(false);
+        $this->crlValidator->method('isRevoked')
+            ->with($this->certificate, $this->issuer)
+            ->willReturn(false)
+        ;
 
         $checker = new RevocationChecker(
             RevocationPolicy::OCSP_PREFERRED,
@@ -359,10 +288,14 @@ final class RevocationCheckerTest extends TestCase
         ;
 
         // 配置颁发者证书返回CRL分发点
-                $this->issuer->setExtensionResponse('cRLDistributionPoints', ['http://crl.example.com/ca.crl']);
+        $this->issuer->setExtensions([
+            'cRLDistributionPoints' => ['http://crl.example.com/ca.crl'],
+        ]);
 
         // 配置CRL验证器抛出异常
-                $this->crlValidator->setExceptionToThrow(new \Exception('CRL检查失败'));
+        $this->crlValidator->method('isRevoked')
+            ->willThrowException(new \Exception('CRL检查失败'))
+        ;
 
         $checker = new RevocationChecker(
             RevocationPolicy::SOFT_FAIL,
@@ -389,10 +322,14 @@ final class RevocationCheckerTest extends TestCase
         ;
 
         // 配置颁发者证书返回CRL分发点
-                $this->issuer->setExtensionResponse('cRLDistributionPoints', ['http://crl.example.com/ca.crl']);
+        $this->issuer->setExtensions([
+            'cRLDistributionPoints' => ['http://crl.example.com/ca.crl'],
+        ]);
 
         // 配置CRL验证器抛出异常
-                $this->crlValidator->setExceptionToThrow(new \Exception('CRL服务器不可用'));
+        $this->crlValidator->method('isRevoked')
+            ->willThrowException(new \Exception('CRL服务器不可用'))
+        ;
 
         $checker = new RevocationChecker(
             RevocationPolicy::HARD_FAIL,
